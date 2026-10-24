@@ -1,0 +1,17 @@
+# Saídas de compilação
+dist/
+release/
+build-check/
+
+# Dependências descarregadas pelo build.ps1
+lib/
+
+# Capturas geradas por test/verify.ps1
+test/*.png
+test/*.exe
+
+# Sistema
+Thumbs.db
+desktop.ini
+*.user
+.vs/
