@@ -92,18 +92,28 @@ A verificação consulta a API pública do GitHub e não envia dados do utilizad
 
 ### Publicar uma nova versão
 
-1. Atualize a versão em `src/AssemblyInfo.cs`, `setup/SetupInfo.cs` e
-   `setup/Setup.cs` (`AppVersion`).
-2. Crie e envie a etiqueta:
+A versão está definida em `setup/Setup.cs` (`AppVersion`) e em
+`setup/SetupInfo.cs` / `src/AssemblyInfo.cs` (`AssemblyVersion`). Atualize as
+três e registe as alterações.
 
-   ```powershell
-   git tag v1.4.1
-   git push origin v1.4.1
-   ```
+**Opção 1 — script local** (compila, etiqueta e publica numa só ordem):
 
-O workflow `.github/workflows/release.yml` compila a aplicação e o instalador no
-Windows, confirma que a etiqueta corresponde à versão e publica a release com o
-`TaskbarTempsSetup.exe` anexado.
+```powershell
+.\publish-release.ps1 -DryRun   # confirma a versão e o que será enviado
+.\publish-release.ps1           # compila, cria a etiqueta e publica a release
+```
+
+**Opção 2 — GitHub Actions** (pipeline em `.github/workflows/release.yml`):
+
+```powershell
+git tag v1.4.1
+git push origin v1.4.1
+```
+
+O workflow compila a aplicação e o instalador no Windows, confirma que a
+etiqueta corresponde à versão e publica a release com o
+`TaskbarTempsSetup.exe` anexado. Requer que o token do `gh` tenha o scope
+`workflow` (`gh auth refresh -s workflow`).
 
 ---
 
