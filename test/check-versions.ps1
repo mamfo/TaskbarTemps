@@ -24,19 +24,22 @@ function Read-Version {
     return $match.Groups[1].Value
 }
 
-$appVersion = Read-Version (Join-Path $Root "setup\Setup.cs") `
+$setupDir = Join-Path $Root "setup"
+$srcDir = Join-Path $Root "src"
+
+$appVersion = Read-Version (Join-Path $setupDir "Setup.cs") `
     'AppVersion\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"' "AppVersion"
 
-$setupAssembly = Read-Version (Join-Path $Root "setup\SetupInfo.cs") `
+$setupAssembly = Read-Version (Join-Path $setupDir "SetupInfo.cs") `
     'AssemblyVersion\("([0-9]+(?:\.[0-9]+){1,3})"\)' "AssemblyVersion"
 
-$appAssembly = Read-Version (Join-Path $Root "src\AssemblyInfo.cs") `
+$appAssembly = Read-Version (Join-Path $srcDir "AssemblyInfo.cs") `
     'AssemblyVersion\("([0-9]+(?:\.[0-9]+){1,3})"\)' "AssemblyVersion"
 
-$setupFile = Read-Version (Join-Path $Root "setup\SetupInfo.cs") `
+$setupFile = Read-Version (Join-Path $setupDir "SetupInfo.cs") `
     'AssemblyFileVersion\("([0-9]+(?:\.[0-9]+){1,3})"\)' "AssemblyFileVersion"
 
-$appFile = Read-Version (Join-Path $Root "src\AssemblyInfo.cs") `
+$appFile = Read-Version (Join-Path $srcDir "AssemblyInfo.cs") `
     'AssemblyFileVersion\("([0-9]+(?:\.[0-9]+){1,3})"\)' "AssemblyFileVersion"
 
 foreach ($pair in @(
