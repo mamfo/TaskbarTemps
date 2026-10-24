@@ -242,15 +242,17 @@ namespace TaskbarTempsSetup
                 return true;
             }
 
-            string setup = ExtractPawnIo();
-            if (setup == null)
-            {
-                error = "instalador do PawnIO em falta no pacote";
-                return false;
-            }
-
+            string setup = null;
+            FileStream hold = null;
             try
             {
+                setup = ExtractPawnIo(out hold);
+                if (setup == null)
+                {
+                    error = "instalador do PawnIO em falta no pacote";
+                    return false;
+                }
+
                 ProcessStartInfo info = new ProcessStartInfo(setup, "-install -silent");
                 info.UseShellExecute = false;
                 info.CreateNoWindow = true;
@@ -280,7 +282,14 @@ namespace TaskbarTempsSetup
             }
             finally
             {
-                try { File.Delete(setup); } catch { }
+                if (hold != null)
+                {
+                    try { hold.Dispose(); } catch { }
+                }
+                if (!string.IsNullOrEmpty(setup))
+                {
+                    try { File.Delete(setup); } catch { }
+                }
             }
 
             if (!IsPawnIoInstalled())
@@ -294,20 +303,32 @@ namespace TaskbarTempsSetup
         }
 
         /// <summary>Extrai o instalador do PawnIO (recurso incorporado) para %TEMP%.</summary>
-        private static string ExtractPawnIo()
+        private static string ExtractPawnIo(out FileStream hold)
         {
+            hold = null;
             try
             {
                 Assembly assembly = Assembly.GetExecutingAssembly();
                 using (Stream source = assembly.GetManifestResourceStream(PawnIoResource))
                 {
                     if (source == null) return null;
-                    string path = Path.Combine(Path.GetTempPath(), "TaskbarTemps_PawnIO_setup.exe");
-                    using (FileStream destination = File.Create(path))
+                    string path = Path.Combine(Path.GetTempPath(),
+                        "TaskbarTemps_PawnIO_" + Guid.NewGuid().ToString("N") + ".exe");
+                    FileStream destination = new FileStream(path, FileMode.CreateNew,
+                        FileAccess.Write, FileShare.Read);
+                    try
                     {
                         source.CopyTo(destination);
+                        destination.Flush(true);
+                        hold = destination;
+                        return path;
                     }
-                    return path;
+                    catch
+                    {
+                        destination.Dispose();
+                        try { File.Delete(path); } catch { }
+                        return null;
+                    }
                 }
             }
             catch

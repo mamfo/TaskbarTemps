@@ -93,25 +93,35 @@ namespace TaskbarTemps
                 + "  </Actions>" + Environment.NewLine
                 + "</Task>";
 
-            string file = Path.Combine(Path.GetTempPath(), "TaskbarTemps.task.xml");
+            string file = Path.Combine(Path.GetTempPath(),
+                "TaskbarTemps-" + Guid.NewGuid().ToString("N") + ".task.xml");
+            ProcessResult result = new ProcessResult();
+            result.ExitCode = -1;
+            bool created = false;
             try
             {
-                File.WriteAllText(file, xml, Encoding.Unicode);
+                using (FileStream stream = new FileStream(file, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
+                {
+                    created = true;
+                    using (StreamWriter writer = new StreamWriter(stream, Encoding.Unicode, 4096, true))
+                    {
+                        writer.Write(xml);
+                    }
+                    stream.Flush(true);
+                    result = Run("/Create /TN \"" + TaskName + "\" /XML \"" + file + "\" /F");
+                }
             }
             catch (Exception ex)
             {
                 error = ex.Message;
                 return false;
             }
-
-            ProcessResult result;
-            try
-            {
-                result = Run("/Create /TN \"" + TaskName + "\" /XML \"" + file + "\" /F");
-            }
             finally
             {
-                try { File.Delete(file); } catch { }
+                if (created)
+                {
+                    try { File.Delete(file); } catch { }
+                }
             }
 
             if (result.ExitCode == 0) return true;

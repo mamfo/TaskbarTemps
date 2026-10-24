@@ -29,25 +29,15 @@ function Get-Tool {
     throw "Ferramenta não encontrada: $Name. Instale-a ou adicione-a ao PATH."
 }
 
-$git = Get-Tool "git" "C:\Users\mario\AppData\Local\Programs\devtools\git\cmd\git.exe"
-$gh = Get-Tool "gh" "C:\Users\mario\AppData\Local\Programs\devtools\gh\gh.exe"
+$git = Get-Tool "git" (Join-Path $env:LOCALAPPDATA "Programs\devtools\git\cmd\git.exe")
+$gh = Get-Tool "gh" (Join-Path $env:LOCALAPPDATA "Programs\devtools\gh\gh.exe")
 $env:GIT_TERMINAL_PROMPT = "0"
 
 # --- versão ---------------------------------------------------------------
-$setupSource = Join-Path $root "setup\Setup.cs"
-$match = Select-String -Path $setupSource -Pattern 'AppVersion\s*=\s*"([0-9.]+)"' | Select-Object -First 1
-if (-not $match) { throw "AppVersion não encontrada em setup\Setup.cs." }
-$version = $match.Matches[0].Groups[1].Value
+$version = [string](& (Join-Path $root "test\check-versions.ps1") -Root $root | Select-Object -Last 1)
+if ([string]::IsNullOrWhiteSpace($version)) { throw "Não foi possível determinar a versão do projeto." }
+$version = $version.Trim()
 $tag = "v$version"
-
-$assemblySource = Get-Content (Join-Path $root "setup\SetupInfo.cs") -Raw
-if ($assemblySource -notmatch 'AssemblyVersion\("([0-9.]+)"\)') {
-    throw "AssemblyVersion não encontrada em setup\SetupInfo.cs."
-}
-$assembly = $Matches[1]
-if ($assembly -notlike "$version.*") {
-    throw "AssemblyVersion ($assembly) não corresponde a AppVersion ($version)."
-}
 
 Write-Host "TaskbarTemps $version -> $tag" -ForegroundColor Cyan
 
@@ -67,8 +57,9 @@ $tagExists = $existing.Trim().Length -gt 0
 
 if ($DryRun) {
     Write-Host "  ramo: $branch"
-    Write-Host "  versão: $version (assembly $assembly)"
+    Write-Host "  versão: $version"
     Write-Host "  instalador: release\TaskbarTempsSetup.exe"
+    Write-Host "  integridade: release\TaskbarTempsSetup.exe.sha256"
     Write-Host "  notas: $(if ($NotesFile) { $NotesFile } else { 'geradas pelo GitHub' })"
     if ($tagExists) {
         Write-Warning "A etiqueta $tag já existe: atualize a versão antes de publicar."
@@ -87,6 +78,15 @@ if ($LASTEXITCODE -ne 0) { throw "A compilação do instalador falhou." }
 
 $setup = Join-Path $root "release\TaskbarTempsSetup.exe"
 if (-not (Test-Path $setup)) { throw "Instalador em falta: $setup" }
+
+$hash = Join-Path $root "release\TaskbarTempsSetup.exe.sha256"
+if (-not (Test-Path $hash)) { throw "Ficheiro SHA-256 em falta: $hash" }
+
+$expectedHash = ((Get-Content $hash -Raw) -split '\s+')[0].ToLowerInvariant()
+$actualHash = (Get-FileHash -Path $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($expectedHash -ne $actualHash) {
+    throw "O ficheiro SHA-256 não corresponde ao instalador compilado."
+}
 
 # A versão do instalador tem de coincidir com a etiqueta.
 $info = (Get-Item $setup).VersionInfo
@@ -108,6 +108,7 @@ if ($LASTEXITCODE -ne 0) { throw "Não foi possível enviar a etiqueta $tag." }
 $releaseArgs = @(
     "release", "create", $tag,
     $setup,
+    $hash,
     (Join-Path $root "release\README.md"),
     "--title", "TaskbarTemps $version"
 )

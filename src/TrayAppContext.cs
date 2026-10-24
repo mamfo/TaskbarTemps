@@ -424,6 +424,17 @@ namespace TaskbarTemps
         private void StartInstaller(string path)
         {
             _downloadingUpdate = false;
+            if (_update == null || !Updater.VerifyFile(path, _update.Sha256))
+            {
+                try { File.Delete(path); } catch { }
+                UpdateMenuState();
+                MessageBox.Show(
+                    "O instalador descarregado não passou na verificação de integridade.\n\n"
+                    + "Descarregue manualmente em:\n" + Updater.ReleasePage,
+                    "TaskbarTemps", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             try
             {
                 ProcessStartInfo info = new ProcessStartInfo(path);

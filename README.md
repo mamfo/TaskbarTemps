@@ -90,11 +90,17 @@ driver PawnIO, e preserva as definições em `%APPDATA%\TaskbarTemps`.
 
 A verificação consulta a API pública do GitHub e não envia dados do utilizador.
 
+O instalador descarregado é verificado com SHA-256 contra o ficheiro
+`TaskbarTempsSetup.exe.sha256` publicado na release. Se a verificação falhar,
+o ficheiro é eliminado e a instalação não avança; uma release sem esse ficheiro
+não é instalada automaticamente.
+
 ### Publicar uma nova versão
 
 A versão está definida em `setup/Setup.cs` (`AppVersion`) e em
 `setup/SetupInfo.cs` / `src/AssemblyInfo.cs` (`AssemblyVersion`). Atualize as
-três e registe as alterações.
+três e registe as alterações. O `test/check-versions.ps1` confirma que
+coincidem antes de compilar e falha a publicação se houver divergência.
 
 **Opção 1 — script local** (compila, etiqueta e publica numa só ordem):
 
@@ -112,7 +118,8 @@ git push origin v1.4.1
 
 O workflow compila a aplicação e o instalador no Windows, confirma que a
 etiqueta corresponde à versão e publica a release com o
-`TaskbarTempsSetup.exe` anexado. Requer que o token do `gh` tenha o scope
+`TaskbarTempsSetup.exe` e o respetivo `.sha256` anexados. Também compila em
+pull requests, sem publicar. Requer que o token do `gh` tenha o scope
 `workflow` (`gh auth refresh -s workflow`).
 
 ---

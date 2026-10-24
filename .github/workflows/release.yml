@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check versions
+        shell: pwsh
+        run: |
+          $version = [string](& ./test/check-versions.ps1 | Select-Object -Last 1)
+          if ([string]::IsNullOrWhiteSpace($version)) { throw "Versao do projeto nao encontrada." }
+          $version = $version.Trim()
+          Write-Host "Versao do projeto: $version"
+          if ($env:GITHUB_REF -like "refs/tags/v*") {
+            $tag = $env:GITHUB_REF_NAME
+            if ($tag -ne "v$version") {
+              throw "A tag $tag nao corresponde a versao v$version."
+            }
+          }
+
+      - name: Build app and installer
+        shell: pwsh
+        run: ./build-setup.ps1
+
+      - name: Upload build artifact
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: TaskbarTempsSetup
+          path: |
+            release/TaskbarTempsSetup.exe
+            release/TaskbarTempsSetup.exe.sha256
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          gh release create $tag `
+            "release/TaskbarTempsSetup.exe" `
+            "release/TaskbarTempsSetup.exe.sha256" `
+            "release/README.md" `
+            --title "TaskbarTemps $tag" `
+            --generate-notes

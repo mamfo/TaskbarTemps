@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Web.Script.Serialization;
@@ -17,6 +18,8 @@ namespace TaskbarTemps
         public string ReleaseUrl = string.Empty;
         public string SetupUrl = string.Empty;
         public long SetupSize;
+        public string Sha256Url = string.Empty;
+        public string Sha256 = string.Empty;
         public string Notes = string.Empty;
     }
 
@@ -120,14 +123,27 @@ namespace TaskbarTemps
                     if (asset == null) continue;
                     string name = Text(asset, "name");
                     if (name.IndexOf("TaskbarTempsSetup", StringComparison.OrdinalIgnoreCase) < 0) continue;
-                    if (!name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) continue;
-                    info.SetupUrl = Text(asset, "browser_download_url");
-                    object size;
-                    if (asset.TryGetValue("size", out size) && size != null)
+
+                    if (info.SetupUrl.Length == 0 && name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
                     {
-                        try { info.SetupSize = Convert.ToInt64(size, CultureInfo.InvariantCulture); } catch { }
+                        info.SetupUrl = Text(asset, "browser_download_url");
+                        object size;
+                        if (asset.TryGetValue("size", out size) && size != null)
+                        {
+                            try { info.SetupSize = Convert.ToInt64(size, CultureInfo.InvariantCulture); } catch { }
+                        }
+
+                        string digest = Text(asset, "digest");
+                        if (digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            string value = digest.Substring(7).Trim().ToLowerInvariant();
+                            if (IsSha256(value)) info.Sha256 = value;
+                        }
                     }
-                    break;
+                    else if (info.Sha256Url.Length == 0 && name.EndsWith(".sha256", StringComparison.OrdinalIgnoreCase))
+                    {
+                        info.Sha256Url = Text(asset, "browser_download_url");
+                    }
                 }
             }
 
@@ -154,7 +170,7 @@ namespace TaskbarTemps
             thread.Start();
         }
 
-        /// <summary>Descarrega o instalador da release para %TEMP% e devolve o caminho.</summary>
+        /// <summary>Descarrega e verifica o instalador da release para %TEMP%.</summary>
         public static string Download(UpdateInfo info, Action<int> progress)
         {
             if (info == null) throw new InvalidOperationException("Não há atualização para descarregar.");
@@ -163,28 +179,152 @@ namespace TaskbarTemps
                 throw new InvalidOperationException(
                     "A release não tem o instalador TaskbarTempsSetup.exe anexado.");
             }
-
-            string version = info.Version == null ? "nova" : info.Version.ToString(3);
-            string path = Path.Combine(Path.GetTempPath(), "TaskbarTempsSetup-" + version + ".exe");
-            if (File.Exists(path))
+            if (string.IsNullOrEmpty(info.Sha256) && string.IsNullOrEmpty(info.Sha256Url))
             {
-                try { File.Delete(path); } catch { }
+                throw new InvalidOperationException(
+                    "A release não publica a verificação SHA-256 do instalador. "
+                    + "Instale manualmente a partir de " + ReleasePage + ".");
             }
 
+            string expected = string.IsNullOrEmpty(info.Sha256)
+                ? FetchExpectedHash(info)
+                : info.Sha256;
+            string version = info.Version == null ? "nova" : info.Version.ToString(3);
+            string path = Path.Combine(Path.GetTempPath(),
+                "TaskbarTempsSetup-" + version + "-" + Guid.NewGuid().ToString("N") + ".exe");
+            bool created = false;
+
+            try
+            {
+                using (WebClient client = new WebClient())
+                {
+                    client.Headers[HttpRequestHeader.UserAgent] = UserAgent;
+                    using (Stream input = client.OpenRead(info.SetupUrl))
+                    using (FileStream output = new FileStream(path, FileMode.CreateNew,
+                        FileAccess.Write, FileShare.None))
+                    {
+                        created = true;
+                        CopyWithProgress(input, output, ContentLength(client), progress);
+                        output.Flush(true);
+                    }
+                }
+
+                long length = new FileInfo(path).Length;
+                if (info.SetupSize > 0 && length != info.SetupSize)
+                {
+                    throw new InvalidOperationException(
+                        "O instalador descarregado tem um tamanho diferente do anunciado pela release.");
+                }
+
+                string actual = ComputeSha256(path);
+                if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        "A verificação SHA-256 do instalador falhou. O ficheiro foi eliminado.");
+                }
+
+                info.Sha256 = expected;
+                return path;
+            }
+            catch
+            {
+                if (created) TryDelete(path);
+                throw;
+            }
+        }
+
+        private static string FetchExpectedHash(UpdateInfo info)
+        {
+            string text;
             using (WebClient client = new WebClient())
             {
                 client.Headers[HttpRequestHeader.UserAgent] = UserAgent;
-                if (progress != null)
-                {
-                    client.DownloadProgressChanged += delegate (object sender, DownloadProgressChangedEventArgs e)
-                    {
-                        progress(e.ProgressPercentage);
-                    };
-                }
-                client.DownloadFile(info.SetupUrl, path);
+                text = client.DownloadString(info.Sha256Url);
             }
 
-            return path;
+            foreach (string raw in text.Split(new string[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string token = raw.Trim().TrimStart('\uFEFF');
+                if (token.Length == 0) continue;
+                int space = token.IndexOfAny(new char[] { ' ', '\t' });
+                if (space > 0) token = token.Substring(0, space);
+                token = token.Trim().ToLowerInvariant();
+                if (IsSha256(token)) return token;
+            }
+
+            throw new InvalidOperationException(
+                "O ficheiro SHA-256 da release não tem um valor válido.");
+        }
+
+        private static bool IsSha256(string text)
+        {
+            if (text == null || text.Length != 64) return false;
+            foreach (char c in text)
+            {
+                bool hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+                if (!hex) return false;
+            }
+            return true;
+        }
+
+        private static long ContentLength(WebClient client)
+        {
+            string value = client.ResponseHeaders == null ? null : client.ResponseHeaders["Content-Length"];
+            long length;
+            if (!string.IsNullOrEmpty(value)
+                && long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out length))
+            {
+                return length;
+            }
+            return -1;
+        }
+
+        private static void CopyWithProgress(Stream input, Stream output, long total, Action<int> progress)
+        {
+            byte[] buffer = new byte[81920];
+            long received = 0;
+            int last = -1;
+            int read;
+            while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                output.Write(buffer, 0, read);
+                received += read;
+                if (progress != null && total > 0)
+                {
+                    int percent = (int)(received * 100L / total);
+                    if (percent > 100) percent = 100;
+                    if (percent != last)
+                    {
+                        last = percent;
+                        progress(percent);
+                    }
+                }
+            }
+            if (progress != null && total > 0 && last < 100) progress(100);
+        }
+
+        public static string ComputeSha256(string path)
+        {
+            using (FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (SHA256 sha = SHA256.Create())
+            {
+                byte[] hash = sha.ComputeHash(stream);
+                StringBuilder text = new StringBuilder(hash.Length * 2);
+                foreach (byte value in hash) text.Append(value.ToString("x2", CultureInfo.InvariantCulture));
+                return text.ToString();
+            }
+        }
+
+        public static bool VerifyFile(string path, string expected)
+        {
+            if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(expected) || !File.Exists(path)) return false;
+            return string.Equals(ComputeSha256(path), expected, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void TryDelete(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return;
+            try { if (File.Exists(path)) File.Delete(path); } catch { }
         }
 
         private static string Text(Dictionary<string, object> map, string key)

@@ -15,6 +15,7 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $dist = Join-Path $root "dist"
+$version = [string](& (Join-Path $root "test\check-versions.ps1") -Root $root | Select-Object -Last 1)
 
 if ([string]::IsNullOrWhiteSpace($Output)) {
     $Output = Join-Path $root "release"
@@ -87,9 +88,15 @@ try {
         Copy-Item (Join-Path $root "README.md") (Join-Path $Output "README.md") -Force
     }
 
+    $hash = (Get-FileHash -Path $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hashFile = Join-Path $Output "TaskbarTempsSetup.exe.sha256"
+    Set-Content -Path $hashFile -Value ($hash + "  TaskbarTempsSetup.exe") -Encoding ASCII
+
     $size = [math]::Round((Get-Item $exe).Length / 1MB, 1)
     Write-Host ""
     Write-Host "OK: $exe ($size MB)" -ForegroundColor Green
+    Write-Host "    versão: $version"
+    Write-Host "    SHA-256: $hashFile" -ForegroundColor Green
     Write-Host "    ficheiros incluídos: $($payload.Count)"
 } finally {
     Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
