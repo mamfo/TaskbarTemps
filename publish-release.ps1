@@ -43,8 +43,8 @@ Write-Host "TaskbarTemps $version -> $tag" -ForegroundColor Cyan
 
 # --- estado do repositório ------------------------------------------------
 $branch = (& $git -C $root rev-parse --abbrev-ref HEAD).Trim()
-$dirty = (& $git -C $root status --porcelain) -join "`n"
-if ($dirty.Trim().Length -gt 0) {
+$dirty = ((& $git -C $root status --porcelain) -join "`n")
+if ($dirty -and $dirty.Trim().Length -gt 0) {
     Write-Warning "Existem alterações não registadas:"
     Write-Host $dirty
     if (-not $DryRun) {
@@ -52,8 +52,8 @@ if ($dirty.Trim().Length -gt 0) {
     }
 }
 
-$existing = (& $git -C $root tag --list $tag)
-$tagExists = $existing.Trim().Length -gt 0
+$existing = ((& $git -C $root tag --list $tag) -join "`n")
+$tagExists = $existing -and $existing.Trim().Length -gt 0
 
 if ($DryRun) {
     Write-Host "  ramo: $branch"
