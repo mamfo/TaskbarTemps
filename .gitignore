@@ -14,6 +14,7 @@ test/*.exe
 test/build/
 test/preview/
 test/update/
+test/settings-test/
 
 # Sistema
 Thumbs.db

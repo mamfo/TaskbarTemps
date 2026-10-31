@@ -34,16 +34,25 @@ namespace TaskbarTemps
 
         public static string FilePath
         {
-            get { return Path.Combine(DataDirectory, "settings.ini"); }
+            get
+            {
+                // As pré-visualizações de teste podem apontar para um ficheiro
+                // próprio, para nunca mexerem nas definições da aplicação
+                // instalada.
+                string isolated = Environment.GetEnvironmentVariable("TBT_SETTINGS_FILE");
+                if (!string.IsNullOrEmpty(isolated)) return isolated;
+                return Path.Combine(DataDirectory, "settings.ini");
+            }
         }
 
         public static Settings Load()
         {
             Settings s = new Settings();
+            string text = ReadSettingsText();
+            if (text == null) return s;
             try
             {
-                if (!File.Exists(FilePath)) return s;
-                foreach (string raw in File.ReadAllLines(FilePath))
+                foreach (string raw in text.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
                 {
                     string line = raw.Trim();
                     if (line.Length == 0 || line.StartsWith("#")) continue;
@@ -119,6 +128,7 @@ namespace TaskbarTemps
                             break;
                     }
                 }
+                Log.Write("Definições carregadas: " + Describe(s));
             }
             catch (Exception ex)
             {
@@ -131,7 +141,7 @@ namespace TaskbarTemps
         {
             try
             {
-                Directory.CreateDirectory(DataDirectory);
+                Directory.CreateDirectory(Path.GetDirectoryName(FilePath));
                 string[] lines = new string[]
                 {
                     "# TaskbarTemps - configuração",
@@ -151,12 +161,107 @@ namespace TaskbarTemps
                     "ShowIpLocal=" + ShowIpLocal.ToString(),
                     "ShowIpPublic=" + ShowIpPublic.ToString()
                 };
-                File.WriteAllLines(FilePath, lines);
+                string text = string.Join(Environment.NewLine, lines) + Environment.NewLine;
+
+                // Não regrava quando nada mudou: o registo interno passa a
+                // mostrar apenas as alterações reais feitas pelo utilizador.
+                string current = null;
+                try
+                {
+                    if (File.Exists(FilePath)) current = File.ReadAllText(FilePath);
+                }
+                catch
+                {
+                }
+                if (string.Equals(current, text, StringComparison.Ordinal)) return;
+
+                WriteAtomic(FilePath, text);
+                Log.Write("Definições gravadas: " + Describe(this));
             }
             catch (Exception ex)
             {
                 Log.Write("Falha ao gravar configurações: " + ex.Message);
             }
+        }
+
+        /// <summary>
+        /// Lê as definições. Se o ficheiro principal não existir ou estiver
+        /// incompleto, recorre à cópia deixada pela escrita atómica, para que
+        /// o widget não volte a arrancar com todas as opções por engano.
+        /// </summary>
+        private static string ReadSettingsText()
+        {
+            string path = FilePath;
+            try
+            {
+                if (File.Exists(path) && LooksLikeSettings(path)) return File.ReadAllText(path);
+            }
+            catch (Exception ex)
+            {
+                Log.Write("Falha ao ler configurações: " + ex.Message);
+            }
+
+            string backup = path + ".bak";
+            try
+            {
+                if (File.Exists(backup) && LooksLikeSettings(backup))
+                {
+                    Log.Write("Definições recuperadas de settings.ini.bak.");
+                    return File.ReadAllText(backup);
+                }
+            }
+            catch
+            {
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Um ficheiro de definições válido contém a primeira chave (IntervalMs).
+        /// Um ficheiro truncado por uma gravação interrompida não a contém.
+        /// </summary>
+        private static bool LooksLikeSettings(string path)
+        {
+            using (StreamReader reader = new StreamReader(path))
+            {
+                string line;
+                int seen = 0;
+                while ((line = reader.ReadLine()) != null && seen < 32)
+                {
+                    string trimmed = line.Trim();
+                    if (trimmed.Length == 0 || trimmed.StartsWith("#")) continue;
+                    if (trimmed.StartsWith("IntervalMs=", StringComparison.OrdinalIgnoreCase)) return true;
+                    seen++;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Escreve em duas fases: primeiro um temporário completo, depois
+        /// substituição atómica (deixando a versão anterior em .bak). Um
+        /// processo terminado a meio da gravação — o que acontece quando o
+        /// instalador encerra a app durante uma atualização, ou quando o
+        /// Windows encerra a sessão — nunca deixa o ficheiro principal truncado.
+        /// </summary>
+        private static void WriteAtomic(string path, string text)
+        {
+            string temp = path + ".tmp";
+            File.WriteAllText(temp, text);
+            if (File.Exists(path)) File.Replace(temp, path, path + ".bak");
+            else File.Move(temp, path);
+        }
+
+        /// <summary>Resumo do estado, usado no registo interno da app.</summary>
+        private static string Describe(Settings s)
+        {
+            System.Collections.Generic.List<string> enabled =
+                new System.Collections.Generic.List<string>();
+            foreach (BarItemKind kind in WidgetItems.Order)
+            {
+                if (WidgetItems.IsEnabled(s, kind)) enabled.Add(WidgetItems.MenuLabel(kind));
+            }
+            return "itens=[" + string.Join(", ", enabled.ToArray()) + "] visível=" + s.Visible;
         }
 
         private static bool ReadBool(string value, bool fallback)

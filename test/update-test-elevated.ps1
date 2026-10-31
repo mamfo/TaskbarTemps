@@ -28,6 +28,31 @@ Start-Sleep -Seconds 2
 $exe = Join-Path $PSScriptRoot "update\TaskbarTemps.exe"
 if (-not (Test-Path $exe)) { Note "EXE EM FALTA: $exe"; exit 1 }
 
+# O teste de atualização usa um ficheiro de definições próprio, para não
+# mexer nas definições reais da aplicação instalada.
+$settings = Join-Path (Split-Path -Parent $exe) "settings.ini"
+if (-not (Test-Path $settings)) {
+    @'
+# TaskbarTemps - configuração (teste de atualização)
+IntervalMs=1000
+Visible=True
+OffsetX=0
+OffsetY=0
+Theme=auto
+UsageWhenNoTemp=True
+CheckUpdates=True
+AutoInstall=True
+ShowCpu=True
+ShowRam=True
+ShowGpu=True
+ShowDisk=True
+ShowNet=True
+ShowIpLocal=False
+ShowIpPublic=False
+'@ | Set-Content $settings -Encoding UTF8
+}
+$env:TBT_SETTINGS_FILE = $settings
+
 try {
     Start-Process -FilePath $exe -WorkingDirectory (Split-Path -Parent $exe)
     Note "cópia de teste arrancada"

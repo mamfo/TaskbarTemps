@@ -65,17 +65,39 @@ Get-Process TaskbarTemps -ErrorAction SilentlyContinue |
     Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 500
 
-if ($ShowIp) {
-    $settings = Join-Path $env:APPDATA "TaskbarTemps\settings.ini"
-    if (Test-Path $settings) {
-        $text = Get-Content $settings -Raw
-        $value = $ShowIp.ToString()
-        $text = [regex]::Replace($text, '(?m)^ShowIpLocal=.*$', "ShowIpLocal=$value")
-        $text = [regex]::Replace($text, '(?m)^ShowIpPublic=.*$', "ShowIpPublic=$value")
-        [System.IO.File]::WriteAllText($settings, $text, (New-Object System.Text.UTF8Encoding($false)))
-    }
+# As pré-visualizações usam um ficheiro de definições próprio, para nunca
+# mexerem nas definições da aplicação instalada.
+$settings = Join-Path $out "settings.ini"
+if (-not (Test-Path $settings)) {
+    @'
+# TaskbarTemps - configuração (pré-visualização)
+IntervalMs=1000
+Visible=True
+OffsetX=0
+OffsetY=0
+Theme=auto
+UsageWhenNoTemp=True
+CheckUpdates=True
+AutoInstall=True
+ShowCpu=True
+ShowRam=True
+ShowGpu=True
+ShowDisk=True
+ShowNet=True
+ShowIpLocal=False
+ShowIpPublic=False
+'@ | Set-Content $settings -Encoding UTF8
 }
 
+if ($ShowIp) {
+    $text = Get-Content $settings -Raw
+    $value = $ShowIp.ToString()
+    $text = [regex]::Replace($text, '(?m)^ShowIpLocal=.*$', "ShowIpLocal=$value")
+    $text = [regex]::Replace($text, '(?m)^ShowIpPublic=.*$', "ShowIpPublic=$value")
+    [System.IO.File]::WriteAllText($settings, $text, (New-Object System.Text.UTF8Encoding($false)))
+}
+
+$env:TBT_SETTINGS_FILE = $settings
 Start-Process -FilePath (Join-Path $out "TaskbarTemps.exe")
 Start-Sleep -Seconds 6
 
