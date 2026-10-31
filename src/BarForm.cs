@@ -560,7 +560,9 @@ namespace TaskbarTemps
                             }
                         }
 
-                        float textX = x + _badgePadX;
+                        // Texto centrado dentro do badge (rótulo + valor juntos).
+                        float textWidth = item.LabelWidth + _labelGap + item.SlotWidth;
+                        float textX = x + (item.BadgeWidth - textWidth) / 2f;
 
                         using (SolidBrush labelBrush = new SolidBrush(item.Accent))
                         {
