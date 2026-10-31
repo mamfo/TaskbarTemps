@@ -6,12 +6,15 @@ Widget nativo para Windows 11 que mostra, junto ao relógio da barra de tarefas:
 - **utilização da RAM** (e temperatura, quando o módulo tem sensor);
 - temperatura e **utilização da GPU**;
 - **velocidade do disco**: leitura e escrita;
-- **tráfego de rede**: velocidade de receção e de envio.
+- **tráfego de rede**: velocidade de receção e de envio;
+- **endereços IP** interno (LAN) e público (WAN), opcionais.
 
 ```text
 CPU 49° 12%  ·  RAM 51%  ·  GPU 39° 8%  ·  DISCO L1,2M E300K  ·  REDE ▼1,2M ▲40K
 ```
 
+- Escolha dos itens visíveis no menu **Itens no widget** (CPU, RAM, GPU, disco,
+  rede, IP interno, IP público).
 - Sem instalador externo, sem .NET SDK e sem dependências para além das DLLs incluídas.
 - Interface em português de Portugal.
 - Tema claro/escuro automático, seguindo a definição do Windows.
@@ -128,7 +131,7 @@ pull requests, sem publicar. Requer que o token do `gh` tenha o scope
 
 | Ação | Resultado |
 |---|---|
-| Passar o cursor | Tooltip com CPU, RAM, GPU, disco e rede em detalhe |
+| Passar o cursor | Tooltip com CPU, RAM, GPU, disco, rede e IPs |
 | Clique simples | Janela **Sensores** com todos os valores e botão para copiar o relatório |
 | Arrastar | Move o widget ao longo da barra de tarefas (a posição fica guardada) |
 | Botão direito | Menu de contexto |
@@ -136,7 +139,10 @@ pull requests, sem publicar. Requer que o token do `gh` tenha o scope
 ### Menu
 
 - **Mostrar na barra de tarefas** — ocultar/mostrar o widget sem fechar a aplicação.
-- **Ver sensores…** — janela de detalhes.
+- **Itens no widget** — escolhe o que aparece na barra: CPU, RAM, GPU, Disco,
+  Rede, IP interno (LAN) e IP público (WAN). A escolha fica em `settings.ini` e
+  tem de ficar pelo menos um item visível.
+- **Ver sensores…** — janela de detalhes, com os endereços IP e todos os sensores.
 - **Procurar atualizações** — procura e instala uma versão mais recente.
 - **Procurar atualizações automaticamente** — ativa/desativa a verificação periódica.
 - **Atualizar a cada** — 0,5 s, 1 s, 2 s ou 5 s.
@@ -146,6 +152,16 @@ pull requests, sem publicar. Requer que o token do `gh` tenha o scope
 - **Iniciar com o Windows** — cria/remove a tarefa agendada.
 - **Repor posição** — devolve o widget à posição predefinida.
 - **Sair** — fecha a aplicação.
+
+### Endereços IP
+
+- **IP interno (LAN)** — lido localmente, sem qualquer pedido à Internet (a cada
+  10 segundos). Aparece como `IP LAN 192.168.1.50`.
+- **IP público (WAN)** — obtido em `api.ipify.org` (com `ifconfig.me` e
+  `icanhazip.com` como alternativa) e guardado em cache durante 30 minutos.
+  Só é consultado quando o item está visível no widget ou quando a janela
+  **Sensores** está aberta; caso contrário a aplicação não faz pedidos externos.
+  Aparece como `IP WAN 203.0.113.7`.
 
 ---
 

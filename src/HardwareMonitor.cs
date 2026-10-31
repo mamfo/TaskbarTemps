@@ -53,6 +53,10 @@ namespace TaskbarTemps
         public double? DiskReadBps;
         public double? DiskWriteBps;
 
+        public string IpLocal = string.Empty;
+        public string IpPublic = string.Empty;
+        public bool IpPublicEnabled;
+
         public List<SensorRow> Rows = new List<SensorRow>();
     }
 
@@ -95,6 +99,7 @@ namespace TaskbarTemps
         private readonly UpdateVisitor _visitor = new UpdateVisitor();
         private readonly NetworkUsage _network = new NetworkUsage();
         private readonly DiskUsage _disk = new DiskUsage();
+        private readonly PublicIpLookup _publicIp = new PublicIpLookup();
         private readonly object _gate = new object();
         private readonly ManualResetEvent _wake = new ManualResetEvent(false);
         private readonly bool _isAdmin;
@@ -105,6 +110,8 @@ namespace TaskbarTemps
         private volatile int _intervalMs = 1000;
         private bool _opened;
         private DateTime _nextOpenAttempt = DateTime.MinValue;
+        private string _localIp = string.Empty;
+        private DateTime _nextLocalIp = DateTime.MinValue;
         private bool _disposed;
 
         public HardwareMonitor()
@@ -141,6 +148,16 @@ namespace TaskbarTemps
         {
             _intervalMs = Math.Max(500, Math.Min(10000, milliseconds));
             _wake.Set();
+        }
+
+        /// <summary>
+        /// Liga a consulta do IP público. Enquanto estiver desligada, a aplicação
+        /// não faz qualquer pedido à Internet.
+        /// </summary>
+        public bool PublicIpEnabled
+        {
+            get { return _publicIp.Enabled; }
+            set { _publicIp.Enabled = value; }
         }
 
         public void Start()
@@ -208,6 +225,17 @@ namespace TaskbarTemps
                 snap.DiskWriteBps = _disk.WriteBps;
             }
 
+            // Endereços IP: o interno é lido localmente (sem rede) a cada 10 s;
+            // o público vem da cache preenchida pela consulta em segundo plano.
+            if (DateTime.Now >= _nextLocalIp)
+            {
+                _localIp = NetworkAddresses.LocalIPv4();
+                _nextLocalIp = DateTime.Now.AddSeconds(10);
+            }
+            snap.IpLocal = _localIp;
+            snap.IpPublicEnabled = _publicIp.Enabled;
+            snap.IpPublic = _publicIp.Current;
+
             if (!_opened)
             {
                 if (DateTime.Now < _nextOpenAttempt)
@@ -255,6 +283,7 @@ namespace TaskbarTemps
             snap.Rows = BuildRows(all);
             AppendDiskRows(snap);
             AppendNetworkRows(snap);
+            AppendIpRows(snap);
 
             return snap;
         }
@@ -297,6 +326,38 @@ namespace TaskbarTemps
 
             snap.Rows.Add(down);
             snap.Rows.Add(up);
+        }
+
+        private static void AppendIpRows(SensorSnapshot snap)
+        {
+            if (!string.IsNullOrEmpty(snap.IpLocal))
+            {
+                SensorRow local = new SensorRow();
+                local.Hardware = "Rede";
+                local.Type = "Endereço IP";
+                local.Name = "Interno";
+                local.Value = snap.IpLocal;
+                snap.Rows.Add(local);
+            }
+
+            if (!string.IsNullOrEmpty(snap.IpPublic))
+            {
+                SensorRow wan = new SensorRow();
+                wan.Hardware = "Rede";
+                wan.Type = "Endereço IP";
+                wan.Name = "Público";
+                wan.Value = snap.IpPublic;
+                snap.Rows.Add(wan);
+            }
+            else if (snap.IpPublicEnabled)
+            {
+                SensorRow wan = new SensorRow();
+                wan.Hardware = "Rede";
+                wan.Type = "Endereço IP";
+                wan.Name = "Público";
+                wan.Value = "a obter…";
+                snap.Rows.Add(wan);
+            }
         }
 
         private static void Collect(IHardware hardware, List<IHardware> all, List<IHardware> cpus,
@@ -675,6 +736,7 @@ namespace TaskbarTemps
             catch { }
             _network.Dispose();
             _disk.Dispose();
+            _publicIp.Dispose();
             _wake.Close();
         }
     }

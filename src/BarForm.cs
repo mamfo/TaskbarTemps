@@ -14,6 +14,7 @@ namespace TaskbarTemps
     {
         private sealed class BarItem
         {
+            public BarItemKind Kind;
             public string Label;
             public string Value;
             public string Slot;
@@ -46,6 +47,7 @@ namespace TaskbarTemps
         private int _defaultY;
         private int _taskbarHeight;
         private bool _dirty = true;
+        private bool _layoutDirty = true;
         private bool _dragging;
         private bool _pointerInside;
         private Point _dragStart;
@@ -92,12 +94,37 @@ namespace TaskbarTemps
             _tip.AutoPopDelay = 15000;
             _tip.ShowAlways = true;
 
-            _items.Add(new BarItem { Label = "CPU", Value = "--", Slot = "99° 99%" });
-            _items.Add(new BarItem { Label = "RAM", Value = "--", Slot = "99° 99%" });
-            _items.Add(new BarItem { Label = "GPU", Value = "--", Slot = "99° 99%" });
-            _items.Add(new BarItem { Label = "DISCO", Value = "--", Slot = "L999M E999M" });
-            _items.Add(new BarItem { Label = "REDE", Value = "--", Slot = "▼999M ▲999M" });
+            RebuildItems();
+        }
+
+        /// <summary>
+        /// Recria a lista de itens conforme as preferências (menu "Itens no widget").
+        /// </summary>
+        public void ApplyVisibility()
+        {
+            RebuildItems();
+        }
+
+        private void RebuildItems()
+        {
+            _items.Clear();
+            if (_settings != null)
+            {
+                foreach (BarItemKind kind in WidgetItems.Order)
+                {
+                    if (!WidgetItems.IsEnabled(_settings, kind)) continue;
+                    BarItem item = new BarItem();
+                    item.Kind = kind;
+                    item.Label = WidgetItems.Label(kind);
+                    item.Slot = WidgetItems.Slot(kind);
+                    item.Value = "--";
+                    _items.Add(item);
+                }
+            }
+
             AttachAccents();
+            _layoutDirty = true;
+            _dirty = true;
         }
 
         protected override bool ShowWithoutActivation
@@ -138,43 +165,51 @@ namespace TaskbarTemps
         public void SetSnapshot(SensorSnapshot snapshot, bool usageWhenNoTemp)
         {
             _snapshot = snapshot;
-            if (_items.Count < 5) return;
 
-            _items[0].Value = CombinedValue(snapshot.CpuTemp, snapshot.CpuLoad, usageWhenNoTemp);
-            _items[0].IsTemperature = snapshot.CpuTemp.HasValue;
-            _items[0].Temperature = snapshot.CpuTemp;
-
-            _items[1].Value = CombinedValue(snapshot.RamTemp, snapshot.RamLoad, usageWhenNoTemp);
-            _items[1].IsTemperature = snapshot.RamTemp.HasValue;
-            _items[1].Temperature = snapshot.RamTemp;
-
-            _items[2].Value = CombinedValue(snapshot.GpuTemp, snapshot.GpuLoad, usageWhenNoTemp);
-            _items[2].IsTemperature = snapshot.GpuTemp.HasValue;
-            _items[2].Temperature = snapshot.GpuTemp;
-
-            if (snapshot.DiskAvailable)
+            foreach (BarItem item in _items)
             {
-                _items[3].Value = "L" + DisplayFormat.ShortRate(snapshot.DiskReadBps)
-                    + " E" + DisplayFormat.ShortRate(snapshot.DiskWriteBps);
-            }
-            else
-            {
-                _items[3].Value = "--";
-            }
-            _items[3].IsTemperature = false;
-            _items[3].Temperature = null;
+                item.IsTemperature = false;
+                item.Temperature = null;
 
-            if (snapshot.NetAvailable)
-            {
-                _items[4].Value = "▼" + DisplayFormat.ShortRate(snapshot.NetDownBps)
-                    + " ▲" + DisplayFormat.ShortRate(snapshot.NetUpBps);
+                switch (item.Kind)
+                {
+                    case BarItemKind.Cpu:
+                        item.Value = CombinedValue(snapshot.CpuTemp, snapshot.CpuLoad, usageWhenNoTemp);
+                        item.IsTemperature = snapshot.CpuTemp.HasValue;
+                        item.Temperature = snapshot.CpuTemp;
+                        break;
+                    case BarItemKind.Ram:
+                        item.Value = CombinedValue(snapshot.RamTemp, snapshot.RamLoad, usageWhenNoTemp);
+                        item.IsTemperature = snapshot.RamTemp.HasValue;
+                        item.Temperature = snapshot.RamTemp;
+                        break;
+                    case BarItemKind.Gpu:
+                        item.Value = CombinedValue(snapshot.GpuTemp, snapshot.GpuLoad, usageWhenNoTemp);
+                        item.IsTemperature = snapshot.GpuTemp.HasValue;
+                        item.Temperature = snapshot.GpuTemp;
+                        break;
+                    case BarItemKind.Disk:
+                        item.Value = snapshot.DiskAvailable
+                            ? "L" + DisplayFormat.ShortRate(snapshot.DiskReadBps)
+                                + " E" + DisplayFormat.ShortRate(snapshot.DiskWriteBps)
+                            : "--";
+                        break;
+                    case BarItemKind.Net:
+                        item.Value = snapshot.NetAvailable
+                            ? "▼" + DisplayFormat.ShortRate(snapshot.NetDownBps)
+                                + " ▲" + DisplayFormat.ShortRate(snapshot.NetUpBps)
+                            : "--";
+                        break;
+                    case BarItemKind.IpLocal:
+                        item.Value = string.IsNullOrEmpty(snapshot.IpLocal) ? "--" : snapshot.IpLocal;
+                        break;
+                    case BarItemKind.IpPublic:
+                        item.Value = !string.IsNullOrEmpty(snapshot.IpPublic)
+                            ? snapshot.IpPublic
+                            : (snapshot.IpPublicEnabled ? "…" : "--");
+                        break;
+                }
             }
-            else
-            {
-                _items[4].Value = "--";
-            }
-            _items[4].IsTemperature = false;
-            _items[4].Temperature = null;
 
             AttachAccents();
             _dirty = true;
@@ -212,12 +247,19 @@ namespace TaskbarTemps
 
         private void AttachAccents()
         {
-            if (_items.Count < 5 || _palette == null) return;
-            _items[0].Accent = _palette.AccentCpu;
-            _items[1].Accent = _palette.AccentRam;
-            _items[2].Accent = _palette.AccentGpu;
-            _items[3].Accent = _palette.AccentDisk;
-            _items[4].Accent = _palette.AccentNet;
+            if (_palette == null) return;
+            foreach (BarItem item in _items)
+            {
+                switch (item.Kind)
+                {
+                    case BarItemKind.Cpu: item.Accent = _palette.AccentCpu; break;
+                    case BarItemKind.Ram: item.Accent = _palette.AccentRam; break;
+                    case BarItemKind.Gpu: item.Accent = _palette.AccentGpu; break;
+                    case BarItemKind.Disk: item.Accent = _palette.AccentDisk; break;
+                    case BarItemKind.Net: item.Accent = _palette.AccentNet; break;
+                    default: item.Accent = _palette.AccentIp; break;
+                }
+            }
         }
 
         public void UpdatePlacement()
@@ -326,6 +368,11 @@ namespace TaskbarTemps
             }
             else
             {
+                if (_width != Width || _height != Height)
+                {
+                    Bounds = new Rectangle(x, y, _width, _height);
+                }
+
                 if (_dirty || _surface == null)
                 {
                     Render();
@@ -380,13 +427,15 @@ namespace TaskbarTemps
 
         private void UpdateMetrics(int taskbarHeight)
         {
-            if (taskbarHeight == _taskbarHeight && _valueFont != null) return;
+            if (!_layoutDirty && taskbarHeight == _taskbarHeight && _valueFont != null) return;
             _taskbarHeight = taskbarHeight;
+            _layoutDirty = false;
 
             int newHeight = Math.Max(26, taskbarHeight - 8);
             float scale = newHeight / 40f;
-            int valuePx = Math.Max(12, (int)Math.Round(15 * scale));
-            int labelPx = Math.Max(9, (int)Math.Round(11 * scale));
+            // Letra ligeiramente mais pequena do que nas versões anteriores.
+            int valuePx = Math.Max(11, (int)Math.Round(13 * scale));
+            int labelPx = Math.Max(8, (int)Math.Round(10 * scale));
 
             if (_labelFont != null) _labelFont.Dispose();
             if (_valueFont != null) _valueFont.Dispose();

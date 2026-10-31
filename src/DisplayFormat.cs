@@ -139,6 +139,20 @@ namespace TaskbarTemps
             }
             sb.AppendLine();
 
+            if (!string.IsNullOrEmpty(s.IpLocal))
+            {
+                sb.AppendLine("IP interno  " + s.IpLocal);
+            }
+
+            if (!string.IsNullOrEmpty(s.IpPublic))
+            {
+                sb.AppendLine("IP público  " + s.IpPublic);
+            }
+            else if (s.IpPublicEnabled)
+            {
+                sb.AppendLine("IP público  a obter…");
+            }
+
             if (!string.IsNullOrEmpty(s.Error)) sb.AppendLine("Aviso: " + s.Error);
             sb.Append("Clique para ver todos os sensores");
             return sb.ToString();
@@ -218,6 +232,27 @@ namespace TaskbarTemps
             else
             {
                 sb.Append("Sem ligação de rede ativa");
+            }
+            return sb.ToString();
+        }
+
+        public static string DetailSummaryIp(SensorSnapshot s)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append("Endereços IP" + Environment.NewLine);
+            sb.Append("Interno: " + (string.IsNullOrEmpty(s.IpLocal) ? "—" : s.IpLocal));
+
+            if (!string.IsNullOrEmpty(s.IpPublic))
+            {
+                sb.Append("   ·   público: " + s.IpPublic);
+            }
+            else if (s.IpPublicEnabled)
+            {
+                sb.Append("   ·   público: a obter…");
+            }
+            else
+            {
+                sb.Append("   ·   público: — (ative em \"Itens no widget\")");
             }
             return sb.ToString();
         }

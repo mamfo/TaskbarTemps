@@ -39,6 +39,8 @@ namespace TaskbarTemps
         private ToolStripMenuItem _miThemeDark;
         private ToolStripMenuItem _miUpdate;
         private ToolStripMenuItem _miAutoUpdate;
+        private readonly System.Collections.Generic.Dictionary<BarItemKind, ToolStripMenuItem> _miItems =
+            new System.Collections.Generic.Dictionary<BarItemKind, ToolStripMenuItem>();
 
         public TrayAppContext()
         {
@@ -118,6 +120,11 @@ namespace TaskbarTemps
                     BeginUpdateCheck(true);
                 }
 
+                // O IP público só é consultado quando está visível no widget ou
+                // quando a janela de sensores está aberta.
+                _monitor.PublicIpEnabled = _settings.ShowIpPublic
+                    || (_details != null && _details.Visible);
+
                 SensorSnapshot snapshot = _monitor.Latest;
                 if (!ReferenceEquals(snapshot, _applied))
                 {
@@ -146,6 +153,24 @@ namespace TaskbarTemps
             _miShow = new ToolStripMenuItem("Mostrar na barra de tarefas");
             _miShow.Click += delegate { SetVisible(!_settings.Visible); };
             menu.Items.Add(_miShow);
+
+            ToolStripMenuItem items = new ToolStripMenuItem("Itens no widget");
+            bool separatorAdded = false;
+            foreach (BarItemKind kind in WidgetItems.Order)
+            {
+                if (!separatorAdded && kind == BarItemKind.IpLocal)
+                {
+                    items.DropDownItems.Add(new ToolStripSeparator());
+                    separatorAdded = true;
+                }
+
+                BarItemKind captured = kind;
+                ToolStripMenuItem entry = new ToolStripMenuItem(WidgetItems.MenuLabel(kind));
+                entry.Click += delegate { ToggleItem(captured); };
+                _miItems[captured] = entry;
+                items.DropDownItems.Add(entry);
+            }
+            menu.Items.Add(items);
 
             ToolStripMenuItem details = new ToolStripMenuItem("Ver sensores…");
             details.Click += delegate { OpenDetails(); };
@@ -221,6 +246,10 @@ namespace TaskbarTemps
 
             _miShow.Checked = _settings.Visible;
             _miUsage.Checked = _settings.UsageWhenNoTemp;
+            foreach (System.Collections.Generic.KeyValuePair<BarItemKind, ToolStripMenuItem> pair in _miItems)
+            {
+                pair.Value.Checked = WidgetItems.IsEnabled(_settings, pair.Key);
+            }
             _miInterval1.Checked = _settings.IntervalMs == 1000;
             _miInterval2.Checked = _settings.IntervalMs == 2000;
             _miInterval5.Checked = _settings.IntervalMs == 5000;
@@ -245,6 +274,24 @@ namespace TaskbarTemps
             _settings.Save();
             _bar.Allowed = visible;
             if (!visible) _bar.Hide();
+            SyncMenuChecks();
+        }
+
+        private void ToggleItem(BarItemKind kind)
+        {
+            bool enable = !WidgetItems.IsEnabled(_settings, kind);
+            if (!enable && WidgetItems.CountEnabled(_settings) <= 1)
+            {
+                MessageBox.Show(
+                    "Mantenha pelo menos um item visível no widget.",
+                    "TaskbarTemps", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            WidgetItems.SetEnabled(_settings, kind, enable);
+            _settings.Save();
+            _bar.ApplyVisibility();
+            _applied = null;
             SyncMenuChecks();
         }
 

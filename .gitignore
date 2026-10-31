@@ -10,6 +10,10 @@ lib/
 test/*.png
 test/*.exe
 
+# Builds de teste (sem elevação)
+test/build/
+test/preview/
+
 # Sistema
 Thumbs.db
 desktop.ini

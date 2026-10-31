@@ -8,7 +8,7 @@ namespace TaskbarTemps
 {
     internal sealed class DetailsForm : Form
     {
-        private readonly Label[] _summary = new Label[5];
+        private readonly Label[] _summary = new Label[6];
         private readonly ListView _list;
         private readonly Label _status;
 
@@ -30,14 +30,14 @@ namespace TaskbarTemps
             AutoScaleMode = AutoScaleMode.Font;
             Font = new Font("Segoe UI", 9f);
             BackColor = Color.White;
-            ClientSize = new Size(700, 528);
-            MinimumSize = new Size(580, 400);
+            ClientSize = new Size(700, 566);
+            MinimumSize = new Size(580, 420);
 
             TableLayoutPanel root = new TableLayoutPanel();
             root.Dock = DockStyle.Fill;
             root.ColumnCount = 1;
             root.RowCount = 3;
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 168f));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 204f));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 56f));
 
@@ -45,10 +45,10 @@ namespace TaskbarTemps
             summary.Dock = DockStyle.Fill;
             summary.Padding = new Padding(14, 8, 14, 6);
             summary.ColumnCount = 2;
-            summary.RowCount = 5;
+            summary.RowCount = 6;
             summary.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 5f));
             summary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            for (int i = 0; i < 5; i++) summary.RowStyles.Add(new RowStyle(SizeType.Percent, 20f));
+            for (int i = 0; i < 6; i++) summary.RowStyles.Add(new RowStyle(SizeType.Percent, 100f / 6f));
 
             Color[] accents = new Color[]
             {
@@ -56,14 +56,15 @@ namespace TaskbarTemps
                 Color.FromArgb(124, 58, 237),
                 Color.FromArgb(5, 150, 105),
                 Color.FromArgb(217, 119, 6),
-                Color.FromArgb(8, 145, 178)
+                Color.FromArgb(8, 145, 178),
+                Color.FromArgb(71, 85, 105)
             };
 
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < 6; i++)
             {
                 Panel accent = new Panel();
                 accent.Dock = DockStyle.Fill;
-                accent.Margin = new Padding(0, 5, 10, 5);
+                accent.Margin = new Padding(0, 4, 10, 4);
                 accent.BackColor = accents[i];
 
                 Label label = new Label();
@@ -186,6 +187,7 @@ namespace TaskbarTemps
             _summary[2].Text = DisplayFormat.DetailSummaryGpu(snapshot);
             _summary[3].Text = DisplayFormat.DetailSummaryDisk(snapshot);
             _summary[4].Text = DisplayFormat.DetailSummaryNetwork(snapshot);
+            _summary[5].Text = DisplayFormat.DetailSummaryIp(snapshot);
 
             UpdateRows(snapshot);
             UpdateStatus(snapshot);
@@ -298,6 +300,7 @@ namespace TaskbarTemps
                 sb.AppendLine(_summary[2].Text.Replace(Environment.NewLine, " | "));
                 sb.AppendLine(_summary[3].Text.Replace(Environment.NewLine, " | "));
                 sb.AppendLine(_summary[4].Text.Replace(Environment.NewLine, " | "));
+                sb.AppendLine(_summary[5].Text.Replace(Environment.NewLine, " | "));
                 sb.AppendLine();
                 foreach (SensorRow row in _snapshot.Rows)
                 {

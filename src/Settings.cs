@@ -15,6 +15,15 @@ namespace TaskbarTemps
         public bool UsageWhenNoTemp = true;
         public bool CheckUpdates = true;
 
+        // Itens visíveis no widget
+        public bool ShowCpu = true;
+        public bool ShowRam = true;
+        public bool ShowGpu = true;
+        public bool ShowDisk = true;
+        public bool ShowNet = true;
+        public bool ShowIpLocal;
+        public bool ShowIpPublic;
+
         public static string DataDirectory
         {
             get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TaskbarTemps"); }
@@ -81,6 +90,27 @@ namespace TaskbarTemps
                                 if (bool.TryParse(value, out v)) s.CheckUpdates = v;
                                 break;
                             }
+                        case "showcpu":
+                            s.ShowCpu = ReadBool(value, s.ShowCpu);
+                            break;
+                        case "showram":
+                            s.ShowRam = ReadBool(value, s.ShowRam);
+                            break;
+                        case "showgpu":
+                            s.ShowGpu = ReadBool(value, s.ShowGpu);
+                            break;
+                        case "showdisk":
+                            s.ShowDisk = ReadBool(value, s.ShowDisk);
+                            break;
+                        case "shownet":
+                            s.ShowNet = ReadBool(value, s.ShowNet);
+                            break;
+                        case "showiplocal":
+                            s.ShowIpLocal = ReadBool(value, s.ShowIpLocal);
+                            break;
+                        case "showippublic":
+                            s.ShowIpPublic = ReadBool(value, s.ShowIpPublic);
+                            break;
                     }
                 }
             }
@@ -105,7 +135,14 @@ namespace TaskbarTemps
                     "OffsetY=" + OffsetY.ToString(CultureInfo.InvariantCulture),
                     "Theme=" + ThemeMode,
                     "UsageWhenNoTemp=" + UsageWhenNoTemp.ToString(),
-                    "CheckUpdates=" + CheckUpdates.ToString()
+                    "CheckUpdates=" + CheckUpdates.ToString(),
+                    "ShowCpu=" + ShowCpu.ToString(),
+                    "ShowRam=" + ShowRam.ToString(),
+                    "ShowGpu=" + ShowGpu.ToString(),
+                    "ShowDisk=" + ShowDisk.ToString(),
+                    "ShowNet=" + ShowNet.ToString(),
+                    "ShowIpLocal=" + ShowIpLocal.ToString(),
+                    "ShowIpPublic=" + ShowIpPublic.ToString()
                 };
                 File.WriteAllLines(FilePath, lines);
             }
@@ -113,6 +150,13 @@ namespace TaskbarTemps
             {
                 Log.Write("Falha ao gravar configurações: " + ex.Message);
             }
+        }
+
+        private static bool ReadBool(string value, bool fallback)
+        {
+            bool v;
+            if (!bool.TryParse(value, out v)) return fallback;
+            return v;
         }
     }
 
@@ -156,6 +200,7 @@ namespace TaskbarTemps
         public Color AccentGpu;
         public Color AccentDisk;
         public Color AccentNet;
+        public Color AccentIp;
         public Color Warn;
         public Color Hot;
 
@@ -174,6 +219,7 @@ namespace TaskbarTemps
                 p.AccentGpu = Color.FromArgb(255, 5, 150, 105);
                 p.AccentDisk = Color.FromArgb(255, 217, 119, 6);
                 p.AccentNet = Color.FromArgb(255, 8, 145, 178);
+                p.AccentIp = Color.FromArgb(255, 71, 85, 105);
                 p.Warn = Color.FromArgb(255, 180, 83, 9);
                 p.Hot = Color.FromArgb(255, 220, 38, 38);
             }
@@ -188,6 +234,7 @@ namespace TaskbarTemps
                 p.AccentGpu = Color.FromArgb(255, 110, 231, 183);
                 p.AccentDisk = Color.FromArgb(255, 251, 146, 60);
                 p.AccentNet = Color.FromArgb(255, 103, 232, 249);
+                p.AccentIp = Color.FromArgb(255, 148, 163, 184);
                 p.Warn = Color.FromArgb(255, 251, 191, 36);
                 p.Hot = Color.FromArgb(255, 248, 113, 113);
             }
@@ -203,7 +250,8 @@ namespace TaskbarTemps
                 && other.Label == Label
                 && other.Value == Value
                 && other.AccentCpu == AccentCpu
-                && other.AccentDisk == AccentDisk;
+                && other.AccentDisk == AccentDisk
+                && other.AccentIp == AccentIp;
         }
     }
 
