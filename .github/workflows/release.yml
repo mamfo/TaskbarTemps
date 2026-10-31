@@ -52,9 +52,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = $env:GITHUB_REF_NAME
+          $title = "TaskbarTemps " + ($tag -replace '^v', '')
+
+          # A release e criada normalmente pelo publish-release.ps1, que usa as
+          # notas escritas para a versao. Nesse caso o trabalho ja esta feito e
+          # este passo apenas confirma; se a tag foi enviada sem o script, o
+          # workflow cria a release como recurso.
+          $existing = gh release view $tag --json tagName --jq .tagName 2>&1
+          if ($LASTEXITCODE -eq 0 -and "$existing".Trim() -eq $tag) {
+            Write-Host "A release $tag ja existe (criada por publish-release.ps1)."
+            gh release view $tag --json assets,isDraft --jq "'isDraft=\(.isDraft) assets=\(.assets | map(.name) | join(', '))'"
+            exit 0
+          }
+
           gh release create $tag `
             "release/TaskbarTempsSetup.exe" `
             "release/TaskbarTempsSetup.exe.sha256" `
             "release/README.md" `
-            --title "TaskbarTemps $tag" `
+            --title $title `
             --generate-notes
