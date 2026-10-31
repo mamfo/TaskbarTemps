@@ -39,6 +39,9 @@ namespace TaskbarTemps
         private ToolStripMenuItem _miThemeDark;
         private ToolStripMenuItem _miUpdate;
         private ToolStripMenuItem _miAutoUpdate;
+        private ToolStripMenuItem _miAutoInstall;
+        private bool _installingSilently;
+        private string _pendingNote;
         private readonly System.Collections.Generic.Dictionary<BarItemKind, ToolStripMenuItem> _miItems =
             new System.Collections.Generic.Dictionary<BarItemKind, ToolStripMenuItem>();
 
@@ -81,6 +84,7 @@ namespace TaskbarTemps
             _timer.Start();
 
             Log.Write("TaskbarTemps iniciado (admin=" + _monitor.Latest.IsAdmin + ")");
+            NoticeCompletedUpdate();
         }
 
         private static Icon LoadIcon(out bool owned)
@@ -118,6 +122,14 @@ namespace TaskbarTemps
                     && DateTime.Now - _lastUpdateCheck > TimeSpan.FromHours(6))
                 {
                     BeginUpdateCheck(true);
+                }
+
+                // Avisa que a atualização automática terminou (uma única vez).
+                if (_pendingNote != null && DateTime.Now - _started > TimeSpan.FromSeconds(5))
+                {
+                    string note = _pendingNote;
+                    _pendingNote = null;
+                    _tray.ShowBalloonTip(6000, "TaskbarTemps", note, ToolTipIcon.Info);
                 }
 
                 // O IP público só é consultado quando está visível no widget ou
@@ -184,6 +196,10 @@ namespace TaskbarTemps
             _miAutoUpdate = new ToolStripMenuItem("Procurar atualizações automaticamente");
             _miAutoUpdate.Click += delegate { ToggleAutoUpdate(); };
             menu.Items.Add(_miAutoUpdate);
+
+            _miAutoInstall = new ToolStripMenuItem("Instalar atualizações automaticamente");
+            _miAutoInstall.Click += delegate { ToggleAutoInstall(); };
+            menu.Items.Add(_miAutoInstall);
 
             menu.Items.Add(new ToolStripSeparator());
 
@@ -403,31 +419,42 @@ namespace TaskbarTemps
             _update = Updater.IsNewer(info) ? info : null;
             UpdateMenuState();
 
-            if (_update != null)
+            if (_update == null)
             {
-                string version = _update.Version.ToString(3);
-                Log.Write("Nova versão disponível: " + version);
-                if (silent)
+                if (!silent)
                 {
-                    _tray.ShowBalloonTip(10000, "TaskbarTemps",
-                        "Nova versão " + version + " disponível. Clique aqui para instalar.",
-                        ToolTipIcon.Info);
+                    MessageBox.Show("Tem a versão mais recente (" + Updater.InstalledText + ").",
+                        "TaskbarTemps", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
-                else
-                {
-                    DialogResult answer = MessageBox.Show(
-                        "Está disponível a versão " + version
-                        + " (tem a " + Updater.InstalledText + ").\n\n"
-                        + "Instalar agora? O TaskbarTemps será reiniciado.",
-                        "TaskbarTemps", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
-                    if (answer == DialogResult.Yes) InstallUpdate();
-                }
+                return;
             }
-            else if (!silent)
+
+            string version = _update.Version.ToString(3);
+            Log.Write("Nova versão disponível: " + version);
+
+            // Atualização automática: só é feita sem perguntar quando a app está
+            // elevada (é o caso da instalação normal); caso contrário mostra o
+            // aviso e deixa o utilizador confirmar o pedido do Windows.
+            if (silent && _settings.AutoInstall && _monitor.Latest.IsAdmin)
             {
-                MessageBox.Show("Tem a versão mais recente (" + Updater.InstalledText + ").",
-                    "TaskbarTemps", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                BeginSilentInstall();
+                return;
             }
+
+            if (silent)
+            {
+                _tray.ShowBalloonTip(10000, "TaskbarTemps",
+                    "Nova versão " + version + " disponível. Clique aqui para instalar.",
+                    ToolTipIcon.Info);
+                return;
+            }
+
+            DialogResult answer = MessageBox.Show(
+                "Está disponível a versão " + version
+                + " (tem a " + Updater.InstalledText + ").\n\n"
+                + "Instalar agora? O TaskbarTemps será reiniciado.",
+                "TaskbarTemps", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+            if (answer == DialogResult.Yes) InstallUpdate();
         }
 
         private void FailUpdateCheck(Exception ex, bool silent)
@@ -443,6 +470,14 @@ namespace TaskbarTemps
                 "TaskbarTemps", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
+        private void ToggleAutoInstall()
+        {
+            _settings.AutoInstall = !_settings.AutoInstall;
+            _settings.Save();
+            UpdateMenuState();
+            if (_settings.AutoInstall && _update != null) BeginSilentInstall();
+        }
+
         private void InstallUpdate()
         {
             if (_update == null || _downloadingUpdate) return;
@@ -453,6 +488,22 @@ namespace TaskbarTemps
                 "TaskbarTemps", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
             if (answer != DialogResult.OK) return;
 
+            BeginDownload(false);
+        }
+
+        /// <summary>Descarrega e instala sem perguntar (a atualização automática).</summary>
+        private void BeginSilentInstall()
+        {
+            if (_update == null || _downloadingUpdate) return;
+            _installingSilently = true;
+            _tray.ShowBalloonTip(6000, "TaskbarTemps",
+                "A atualizar para a versão " + _update.Version.ToString(3) + "…",
+                ToolTipIcon.Info);
+            BeginDownload(true);
+        }
+
+        private void BeginDownload(bool silent)
+        {
             _downloadingUpdate = true;
             UpdateMenuState();
 
@@ -461,20 +512,24 @@ namespace TaskbarTemps
                 {
                     Post(delegate
                     {
-                        if (_miUpdate != null) _miUpdate.Text = "A descarregar… " + percent + "%";
+                        if (_miUpdate != null && !silent) _miUpdate.Text = "A descarregar… " + percent + "%";
                     });
                 },
-                delegate (string path) { Post(delegate { StartInstaller(path); }); },
-                delegate (Exception ex) { Post(delegate { FailDownload(ex); }); });
+                delegate (string path) { Post(delegate { StartInstaller(path, silent); }); },
+                delegate (Exception ex) { Post(delegate { FailDownload(ex, silent); }); });
         }
 
-        private void StartInstaller(string path)
+        private void StartInstaller(string path, bool silent)
         {
             _downloadingUpdate = false;
             if (_update == null || !Updater.VerifyFile(path, _update.Sha256))
             {
                 try { File.Delete(path); } catch { }
+                _installingSilently = false;
                 UpdateMenuState();
+                Log.Write("O instalador descarregado não passou na verificação de integridade.");
+                if (silent) return;
+
                 MessageBox.Show(
                     "O instalador descarregado não passou na verificação de integridade.\n\n"
                     + "Descarregue manualmente em:\n" + Updater.ReleasePage,
@@ -482,43 +537,105 @@ namespace TaskbarTemps
                 return;
             }
 
+            string version = _update.Version == null ? string.Empty : _update.Version.ToString(3);
+
             try
             {
+                if (silent) MarkUpdatedTo(version);
+
                 ProcessStartInfo info = new ProcessStartInfo(path);
                 info.UseShellExecute = true;
                 info.WorkingDirectory = Path.GetDirectoryName(path);
+                // Em silêncio, o instalador substitui os ficheiros, configura o
+                // arranque automático e volta a iniciar o widget.
+                if (silent) info.Arguments = "/S";
                 Process.Start(info);
                 ExitApplication();
             }
             catch (Exception ex)
             {
+                _installingSilently = false;
                 UpdateMenuState();
+                if (silent)
+                {
+                    Log.Write("Não foi possível iniciar o instalador: " + ex.Message);
+                    return;
+                }
+
                 MessageBox.Show("Não foi possível iniciar o instalador:\n" + ex.Message,
                     "TaskbarTemps", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 
-        private void FailDownload(Exception ex)
+        private void FailDownload(Exception ex, bool silent)
         {
             _downloadingUpdate = false;
+            _installingSilently = false;
             UpdateMenuState();
+            Log.Write("Falha ao descarregar a atualização: " + ex.Message);
+            if (silent) return;
+
             MessageBox.Show(
                 "Não foi possível descarregar a atualização:\n" + ex.Message
                 + "\n\nPode descarregar manualmente em:\n" + Updater.ReleasePage,
                 "TaskbarTemps", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
+        /// <summary>Grava a versão pretendida para anunciar a atualização ao voltar a arrancar.</summary>
+        private static void MarkUpdatedTo(string version)
+        {
+            try
+            {
+                Directory.CreateDirectory(Settings.DataDirectory);
+                File.WriteAllText(
+                    Path.Combine(Settings.DataDirectory, "updated.txt"), version);
+            }
+            catch
+            {
+            }
+        }
+
+        private void NoticeCompletedUpdate()
+        {
+            string path = Path.Combine(Settings.DataDirectory, "updated.txt");
+            try
+            {
+                if (!File.Exists(path)) return;
+
+                string text = (File.ReadAllText(path) ?? string.Empty).Trim();
+                try { File.Delete(path); } catch { }
+
+                Version expected;
+                if (!Version.TryParse(text, out expected)) return;
+
+                // Só anuncia se a instalação realmente chegou à versão nova.
+                if (expected > Updater.InstalledVersion) return;
+
+                Log.Write("Atualizado para a versão " + Updater.InstalledText + ".");
+                _pendingNote = "Atualizado para a versão " + Updater.InstalledText + ".";
+            }
+            catch
+            {
+            }
+        }
+
         private void UpdateMenuState()
         {
             if (_miUpdate != null)
             {
-                if (_downloadingUpdate) _miUpdate.Text = "A descarregar a atualização…";
+                if (_downloadingUpdate && _installingSilently) _miUpdate.Text = "A instalar a atualização…";
+                else if (_downloadingUpdate) _miUpdate.Text = "A descarregar a atualização…";
                 else if (_update != null) _miUpdate.Text = "Instalar versão " + _update.Version.ToString(3) + "…";
                 else if (_checkingUpdate) _miUpdate.Text = "A procurar atualizações…";
                 else _miUpdate.Text = "Procurar atualizações";
                 _miUpdate.Enabled = !_checkingUpdate && !_downloadingUpdate;
             }
             if (_miAutoUpdate != null) _miAutoUpdate.Checked = _settings.CheckUpdates;
+            if (_miAutoInstall != null)
+            {
+                _miAutoInstall.Checked = _settings.AutoInstall;
+                _miAutoInstall.Enabled = !_downloadingUpdate;
+            }
         }
 
         private void Post(MethodInvoker action)

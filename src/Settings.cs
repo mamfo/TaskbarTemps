@@ -15,6 +15,9 @@ namespace TaskbarTemps
         public bool UsageWhenNoTemp = true;
         public bool CheckUpdates = true;
 
+        /// <summary>Descarrega e instala a versão nova sem perguntar.</summary>
+        public bool AutoInstall = true;
+
         // Itens visíveis no widget
         public bool ShowCpu = true;
         public bool ShowRam = true;
@@ -90,6 +93,9 @@ namespace TaskbarTemps
                                 if (bool.TryParse(value, out v)) s.CheckUpdates = v;
                                 break;
                             }
+                        case "autoinstall":
+                            s.AutoInstall = ReadBool(value, s.AutoInstall);
+                            break;
                         case "showcpu":
                             s.ShowCpu = ReadBool(value, s.ShowCpu);
                             break;
@@ -136,6 +142,7 @@ namespace TaskbarTemps
                     "Theme=" + ThemeMode,
                     "UsageWhenNoTemp=" + UsageWhenNoTemp.ToString(),
                     "CheckUpdates=" + CheckUpdates.ToString(),
+                    "AutoInstall=" + AutoInstall.ToString(),
                     "ShowCpu=" + ShowCpu.ToString(),
                     "ShowRam=" + ShowRam.ToString(),
                     "ShowGpu=" + ShowGpu.ToString(),

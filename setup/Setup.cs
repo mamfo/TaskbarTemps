@@ -68,7 +68,7 @@ namespace TaskbarTempsSetup
     internal static class Installer
     {
         private const string AppName = "TaskbarTemps";
-        public const string AppVersion = "1.5.0";
+        public const string AppVersion = "1.6.0";
         public const string PawnIoVersion = "2.2.0";
         private const string PawnIoResource = "PawnIO_setup.exe";
         private const string UninstallKey =

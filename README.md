@@ -85,6 +85,11 @@ driver PawnIO, e preserva as definições em `%APPDATA%\TaskbarTemps`.
 
 - **Verificação automática** — 20 segundos depois de arrancar e, depois, a cada
   6 horas. Se existir uma versão nova, aparece um aviso no ícone da bandeja.
+- **Atualização automática** — por predefinição ligada: quando surge uma versão
+  nova, a app descarrega o instalador, valida o SHA-256, instala em silêncio e
+  reinicia o widget já atualizado, sem pedir nada. Ao voltar a arrancar mostra
+  um aviso: *“Atualizado para a versão X”*. Desliga-se no menu
+  **Instalar atualizações automaticamente**.
 - **Procurar atualizações** (menu) — consulta a última release; se houver uma
   versão mais recente, descarrega o instalador, pede confirmação e reinicia o
   widget já atualizado.
@@ -145,7 +150,9 @@ pull requests, sem publicar. Requer que o token do `gh` tenha o scope
 - **Ver sensores…** — janela de detalhes, com os endereços IP e todos os sensores.
 - **Procurar atualizações** — procura e instala uma versão mais recente.
 - **Procurar atualizações automaticamente** — ativa/desativa a verificação periódica.
-- **Atualizar a cada** — 0,5 s, 1 s, 2 s ou 5 s.
+- **Instalar atualizações automaticamente** — ativa/desativa a instalação sem
+  perguntar (descarrega, valida e instala; liga por predefinição).
+- **Atualizar a cada** — 1 s, 2 s ou 5 s.
 - **Tema** — Automático, Claro ou Escuro.
 - **Mostrar uso quando não há sensor** — em vez de `--`, mostra a percentagem de
   utilização (útil para RAM DDR4, ver abaixo).
