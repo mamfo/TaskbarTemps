@@ -21,7 +21,7 @@ namespace TaskbarTemps
             "https://icanhazip.com"
         };
 
-        private static readonly TimeSpan RefreshEvery = TimeSpan.FromMinutes(30);
+        private static readonly TimeSpan RefreshEvery = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan RetryAfter = TimeSpan.FromMinutes(2);
 
         private readonly object _gate = new object();
