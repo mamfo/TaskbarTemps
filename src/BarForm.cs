@@ -560,7 +560,10 @@ namespace TaskbarTemps
                         float textWidth = item.LabelWidth + _labelGap + valueSize.Width;
                         float textX = x + (item.BadgeWidth - textWidth) / 2f;
 
-                        using (SolidBrush labelBrush = new SolidBrush(item.Accent))
+                        // Rótulo a bold: preto no tema claro, branco no escuro
+                        // (o badge é escuro no tema escuro e preto seria ilegível).
+                        Color labelColor = _palette.Light ? Color.Black : Color.White;
+                        using (SolidBrush labelBrush = new SolidBrush(labelColor))
                         {
                             RectangleF labelRect = new RectangleF(textX, 0f, item.LabelWidth + 4f, _height);
                             g.DrawString(item.Label, _labelFont, labelBrush, labelRect, sf);
