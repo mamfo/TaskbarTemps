@@ -61,7 +61,7 @@ jobs:
           $existing = gh release view $tag --json tagName --jq .tagName 2>&1
           if ($LASTEXITCODE -eq 0 -and "$existing".Trim() -eq $tag) {
             Write-Host "A release $tag ja existe (criada por publish-release.ps1)."
-            gh release view $tag --json assets,isDraft --jq "'isDraft=\(.isDraft) assets=\(.assets | map(.name) | join(', '))'"
+            gh release view $tag --json isDraft,assets
             exit 0
           }
 
