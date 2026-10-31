@@ -21,6 +21,7 @@ namespace TaskbarTemps
             public bool IsTemperature;
             public float? Temperature;
             public float LabelWidth;
+            public float BadgeWidth;
             public float SlotWidth;
             public Color Accent;
         }
@@ -56,8 +57,9 @@ namespace TaskbarTemps
         private DateTime _lastTopmost = DateTime.MinValue;
 
         private float _pad;
-        private float _dot;
-        private float _dotGap;
+        private float _badgePadX;
+        private float _badgeHeight;
+        private float _badgeRadius;
         private float _labelGap;
         private float _itemGap;
 
@@ -257,7 +259,8 @@ namespace TaskbarTemps
                     case BarItemKind.Gpu: item.Accent = _palette.AccentGpu; break;
                     case BarItemKind.Disk: item.Accent = _palette.AccentDisk; break;
                     case BarItemKind.Net: item.Accent = _palette.AccentNet; break;
-                    default: item.Accent = _palette.AccentIp; break;
+                    case BarItemKind.IpLocal: item.Accent = _palette.AccentIp; break;
+                    default: item.Accent = _palette.AccentIpPublic; break;
                 }
             }
         }
@@ -439,15 +442,18 @@ namespace TaskbarTemps
 
             if (_labelFont != null) _labelFont.Dispose();
             if (_valueFont != null) _valueFont.Dispose();
-            _labelFont = new Font("Segoe UI", labelPx, FontStyle.Regular, GraphicsUnit.Pixel);
+            _labelFont = CreateLabelFont(labelPx);
             _valueFont = CreateValueFont(valuePx);
 
-            _dot = Math.Max(4f, (float)Math.Round(6f * scale));
-            _dotGap = Math.Max(4f, (float)Math.Round(5f * scale));
-            _labelGap = 4f;
-            _itemGap = Math.Max(6f, (float)Math.Round(10f * scale));
-            _pad = Math.Max(6f, (float)Math.Round(9f * scale));
+            // Cada item tem um badge retangular que envolve o rótulo e o valor,
+            // ajustado à altura da barra.
             _height = newHeight;
+            _badgePadX = Math.Max(5f, (float)Math.Round(8f * scale));
+            _badgeHeight = Math.Max(18f, _height - Math.Max(6f, (float)Math.Round(8f * scale)));
+            _badgeRadius = Math.Min(7f, _badgeHeight / 2f);
+            _labelGap = Math.Max(3f, (float)Math.Round(4f * scale));
+            _itemGap = Math.Max(4f, (float)Math.Round(6f * scale));
+            _pad = Math.Max(4f, (float)Math.Round(6f * scale));
 
             using (StringFormat sf = CreateStringFormat())
             {
@@ -456,13 +462,26 @@ namespace TaskbarTemps
                 {
                     item.LabelWidth = Measure(item.Label, _labelFont, sf).Width;
                     item.SlotWidth = Measure(item.Slot, _valueFont, sf).Width + 3f;
-                    total += _dot + _dotGap + item.LabelWidth + _labelGap + item.SlotWidth;
+                    item.BadgeWidth = item.LabelWidth + _labelGap + item.SlotWidth + _badgePadX * 2f;
+                    total += item.BadgeWidth;
                 }
                 if (_items.Count > 1) total += _itemGap * (_items.Count - 1);
                 _width = (int)Math.Ceiling(total);
             }
 
             _dirty = true;
+        }
+
+        private static Font CreateLabelFont(int pixelSize)
+        {
+            try
+            {
+                return new Font("Segoe UI Semibold", pixelSize, FontStyle.Regular, GraphicsUnit.Pixel);
+            }
+            catch
+            {
+                return new Font("Segoe UI", pixelSize, FontStyle.Bold, GraphicsUnit.Pixel);
+            }
         }
 
         private static Font CreateValueFont(int pixelSize)
@@ -522,20 +541,33 @@ namespace TaskbarTemps
                     float x = _pad + 1f;
                     foreach (BarItem item in _items)
                     {
-                        float dotCx = x + _dot / 2f;
-                        float dotCy = _height / 2f;
-                        using (SolidBrush dotBrush = new SolidBrush(item.Accent))
+                        // Badge retangular: envolve o rótulo e o valor do item
+                        // e ajusta-se à altura da barra.
+                        float badgeTop = (_height - _badgeHeight) / 2f;
+                        RectangleF badge = new RectangleF(
+                            x, badgeTop, item.BadgeWidth, _badgeHeight);
+                        using (GraphicsPath path = RoundedRect(badge, _badgeRadius))
                         {
-                            g.FillEllipse(dotBrush, dotCx - _dot / 2f, dotCy - _dot / 2f, _dot, _dot);
+                            using (SolidBrush fill = new SolidBrush(Color.FromArgb(
+                                102, item.Accent.R, item.Accent.G, item.Accent.B)))
+                            {
+                                g.FillPath(fill, path);
+                            }
+                            using (Pen border = new Pen(Color.FromArgb(
+                                150, item.Accent.R, item.Accent.G, item.Accent.B), 1f))
+                            {
+                                g.DrawPath(border, path);
+                            }
                         }
-                        x += _dot + _dotGap;
 
-                        using (SolidBrush labelBrush = new SolidBrush(_palette.Label))
+                        float textX = x + _badgePadX;
+
+                        using (SolidBrush labelBrush = new SolidBrush(item.Accent))
                         {
-                            RectangleF labelRect = new RectangleF(x, 0f, item.LabelWidth + 4f, _height);
+                            RectangleF labelRect = new RectangleF(textX, 0f, item.LabelWidth + 4f, _height);
                             g.DrawString(item.Label, _labelFont, labelBrush, labelRect, sf);
                         }
-                        x += item.LabelWidth + _labelGap;
+                        textX += item.LabelWidth + _labelGap;
 
                         Color valueColor = _palette.Value;
                         if (item.IsTemperature && item.Temperature.HasValue)
@@ -546,10 +578,10 @@ namespace TaskbarTemps
 
                         using (SolidBrush valueBrush = new SolidBrush(valueColor))
                         {
-                            RectangleF valueRect = new RectangleF(x, 0f, item.SlotWidth + 6f, _height);
+                            RectangleF valueRect = new RectangleF(textX, 0f, item.SlotWidth + 4f, _height);
                             g.DrawString(item.Value, _valueFont, valueBrush, valueRect, sf);
                         }
-                        x += item.SlotWidth + _itemGap;
+                        x += item.BadgeWidth + _itemGap;
                     }
                 }
             }

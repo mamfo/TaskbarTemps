@@ -208,6 +208,7 @@ namespace TaskbarTemps
         public Color AccentDisk;
         public Color AccentNet;
         public Color AccentIp;
+        public Color AccentIpPublic;
         public Color Warn;
         public Color Hot;
 
@@ -226,7 +227,8 @@ namespace TaskbarTemps
                 p.AccentGpu = Color.FromArgb(255, 5, 150, 105);
                 p.AccentDisk = Color.FromArgb(255, 217, 119, 6);
                 p.AccentNet = Color.FromArgb(255, 8, 145, 178);
-                p.AccentIp = Color.FromArgb(255, 71, 85, 105);
+                p.AccentIp = Color.FromArgb(255, 99, 102, 241);
+                p.AccentIpPublic = Color.FromArgb(255, 219, 39, 119);
                 p.Warn = Color.FromArgb(255, 180, 83, 9);
                 p.Hot = Color.FromArgb(255, 220, 38, 38);
             }
@@ -241,7 +243,8 @@ namespace TaskbarTemps
                 p.AccentGpu = Color.FromArgb(255, 110, 231, 183);
                 p.AccentDisk = Color.FromArgb(255, 251, 146, 60);
                 p.AccentNet = Color.FromArgb(255, 103, 232, 249);
-                p.AccentIp = Color.FromArgb(255, 148, 163, 184);
+                p.AccentIp = Color.FromArgb(255, 165, 180, 252);
+                p.AccentIpPublic = Color.FromArgb(255, 244, 114, 182);
                 p.Warn = Color.FromArgb(255, 251, 191, 36);
                 p.Hot = Color.FromArgb(255, 248, 113, 113);
             }
@@ -258,7 +261,8 @@ namespace TaskbarTemps
                 && other.Value == Value
                 && other.AccentCpu == AccentCpu
                 && other.AccentDisk == AccentDisk
-                && other.AccentIp == AccentIp;
+                && other.AccentIp == AccentIp
+                && other.AccentIpPublic == AccentIpPublic;
         }
     }
 
