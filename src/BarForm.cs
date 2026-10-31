@@ -474,14 +474,7 @@ namespace TaskbarTemps
 
         private static Font CreateLabelFont(int pixelSize)
         {
-            try
-            {
-                return new Font("Segoe UI Semibold", pixelSize, FontStyle.Regular, GraphicsUnit.Pixel);
-            }
-            catch
-            {
-                return new Font("Segoe UI", pixelSize, FontStyle.Bold, GraphicsUnit.Pixel);
-            }
+            return new Font("Segoe UI", pixelSize, FontStyle.Bold, GraphicsUnit.Pixel);
         }
 
         private static Font CreateValueFont(int pixelSize)
@@ -560,8 +553,11 @@ namespace TaskbarTemps
                             }
                         }
 
-                        // Texto centrado dentro do badge (rótulo + valor juntos).
-                        float textWidth = item.LabelWidth + _labelGap + item.SlotWidth;
+                        // Texto centrado dentro do badge: a largura real do valor
+                        // (não a máxima reservada), para o conteúdo ficar sempre
+                        // ópticamente ao centro, mesmo com valores curtos.
+                        SizeF valueSize = Measure(item.Value, _valueFont, sf);
+                        float textWidth = item.LabelWidth + _labelGap + valueSize.Width;
                         float textX = x + (item.BadgeWidth - textWidth) / 2f;
 
                         using (SolidBrush labelBrush = new SolidBrush(item.Accent))
@@ -580,7 +576,7 @@ namespace TaskbarTemps
 
                         using (SolidBrush valueBrush = new SolidBrush(valueColor))
                         {
-                            RectangleF valueRect = new RectangleF(textX, 0f, item.SlotWidth + 4f, _height);
+                            RectangleF valueRect = new RectangleF(textX, 0f, valueSize.Width + 4f, _height);
                             g.DrawString(item.Value, _valueFont, valueBrush, valueRect, sf);
                         }
                         x += item.BadgeWidth + _itemGap;
